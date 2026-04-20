@@ -342,17 +342,19 @@ async function run(options: { csvPath: string; resultPath: string }): Promise<vo
   const results: UpdateResult[] = [];
 
   for (const row of rows) {
+    const loopLogger = logger.child({ person: row.Name });
     let result: UpdateResult;
 
     try {
       const contact = await searchContact(accessToken, row.Name);
+
       if (!contact) {
         result = {
           name: row.Name,
           action: 'missing',
           reason: 'no matching contact found',
         };
-        logger.info({ person: row.Name }, 'No contact match found');
+        loopLogger.info('No contact match found');
       } else if (contact.birthdays && contact.birthdays.length > 0) {
         result = {
           name: row.Name,
@@ -360,10 +362,7 @@ async function run(options: { csvPath: string; resultPath: string }): Promise<vo
           resourceName: contact.resourceName,
           reason: 'birthday already exists',
         };
-        logger.info(
-          { person: row.Name, resourceName: contact.resourceName },
-          'Contact birthday already present'
-        );
+        loopLogger.info({ resourceName: contact.resourceName }, 'Contact birthday already present');
       } else {
         const birthday = buildBirthday(row);
         if (!birthday.month || !birthday.day) {
@@ -372,7 +371,7 @@ async function run(options: { csvPath: string; resultPath: string }): Promise<vo
             action: 'error',
             error: 'invalid birthday in CSV row',
           };
-          logger.warn({ person: row.Name }, 'Invalid birthday values in row');
+          loopLogger.warn('Invalid birthday values in row');
         } else {
           await updateContactBirthday(accessToken, contact.resourceName, contact.etag, birthday);
           result = {
@@ -382,10 +381,7 @@ async function run(options: { csvPath: string; resultPath: string }): Promise<vo
             birthday,
             reason: 'birthday added',
           };
-          logger.info(
-            { person: row.Name, resourceName: contact.resourceName },
-            'Updated contact birthday'
-          );
+          loopLogger.info({ resourceName: contact.resourceName }, 'Updated contact birthday');
         }
       }
     } catch (error) {
@@ -400,7 +396,7 @@ async function run(options: { csvPath: string; resultPath: string }): Promise<vo
         action: 'error',
         error: message,
       };
-      logger.error({ person: row.Name, error: message }, 'Failed to process contact');
+      loopLogger.error({ error: message }, 'Failed to process contact');
     }
 
     results.push(result);
