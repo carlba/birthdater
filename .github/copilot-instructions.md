@@ -36,6 +36,21 @@ npm run format         # Format with Prettier
   non-obvious decisions, trade-offs, or workarounds — not descriptions of what the code already
   shows.
 
+## Mandatory Post-Task Checklist
+
+After completing **any** task, coding change, or file modification, you MUST always run these
+commands in order before considering the task done:
+
+1. `npm run lint` — check for linting violations; fix any errors found
+2. `npm run build` — verify the project compiles successfully
+
+Do not mark a task as complete or stop until both commands pass without errors. If either command
+fails, fix the issue and re-run until both pass.
+
+## Other
+
+- Use try catch blocks when handling promises if there isn't a clear advantage of chaining.
+
 ### TypeScript
 
 - Use strict TypeScript — leverage the existing `tsconfig.json` settings.
