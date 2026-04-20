@@ -1,6 +1,9 @@
 # birthdater
 
-Update Google Contacts birthdays from a CSV file.
+Update Google Contacts birthdays from a CSV file. 
+
+Uses the CSV export generated from the
+[Birthday Calendar Exporter for Facebook](https://chromewebstore.google.com/detail/birthday-calendar-exporte/imielmggcccenhgncmpjlehemlinhjjo) Chrome Extension.
 
 ## Install
 
