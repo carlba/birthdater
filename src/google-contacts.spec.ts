@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildBirthday, parseCsv } from './google-contacts.js';
+import { buildBirthday, chooseBestMatch, parseCsv } from './google-contacts.js';
 
 describe('google-contacts CSV parsing', () => {
   it('parses a CSV with quoted fields and an empty year cell', () => {
@@ -51,5 +51,45 @@ describe('google-contacts birthday payload', () => {
       'Link to Profile': '',
     });
     expect(birthday).toEqual({ month: 5, day: 9 });
+  });
+});
+
+describe('google-contacts search matching', () => {
+  it('matches a contact with middle names when searching by first and last name', () => {
+    const people = [
+      {
+        resourceName: 'people/123',
+        names: [
+          {
+            displayName: 'Henrik Petter William Kaddik',
+            givenName: 'Henrik',
+            middleName: 'Petter William',
+            familyName: 'Kaddik',
+          },
+        ],
+      },
+    ] as unknown as import('./google-contacts.js').GooglePerson[];
+
+    const match = chooseBestMatch('Henrik Kaddik', people);
+    expect(match).not.toBeNull();
+    expect(match?.resourceName).toBe('people/123');
+  });
+
+  it('does not match when only the first name appears in the Google contact', () => {
+    const people = [
+      {
+        resourceName: 'people/123',
+        names: [
+          {
+            displayName: 'Henrik Peterson',
+            givenName: 'Henrik',
+            familyName: 'Peterson',
+          },
+        ],
+      },
+    ] as unknown as import('./google-contacts.js').GooglePerson[];
+
+    const match = chooseBestMatch('Henrik Kaddik', people);
+    expect(match).toBeNull();
   });
 });

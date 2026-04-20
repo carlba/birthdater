@@ -22,6 +22,7 @@
     "start": "node --env-file .env dist/google-contacts.js",
     "start:prod": "node dist/google-contacts.js",
     "start:dev": "nodemon --exec \"node --env-file .env --loader tsx\" src/google-contacts.ts",
+    "search-contact": "tsx --env-file .env src/google-contacts.ts --search",
     "lint": "eslint src",
     "test": "vitest run",
     "test:watch": "vitest watch",

@@ -8,7 +8,7 @@ import logger from './logger.js';
 const apiClient = got.extend({
   responseType: 'json',
   retry: {
-    limit: 5,
+    limit: 10,
     methods: ['GET', 'POST', 'PATCH'],
     errorCodes: ['ETIMEDOUT', 'ECONNRESET', 'EAI_AGAIN'],
     maxRetryAfter: 120,
@@ -58,13 +58,41 @@ interface GooglePersonBirthday {
 
 interface GooglePersonName {
   displayName?: string;
+  givenName?: string;
+  familyName?: string;
+  middleName?: string;
+  unstructuredName?: string;
 }
 
-interface GooglePerson {
+export interface GooglePerson {
   resourceName: string;
   etag?: string;
   names?: GooglePersonName[];
   birthdays?: GooglePersonBirthday[];
+}
+
+function normalizeName(name: string): string[] {
+  return name
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}'-]+/gu, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function matchesNameTokens(tokens: string[], nameObject: GooglePersonName): boolean {
+  const candidate = [
+    nameObject.displayName,
+    nameObject.givenName,
+    nameObject.middleName,
+    nameObject.familyName,
+    nameObject.unstructuredName,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  const candidateTokens = normalizeName(candidate);
+  return tokens.every(token => candidateTokens.includes(token));
 }
 
 function parseCsvRow(line: string): string[] {
@@ -169,21 +197,51 @@ async function refreshAccessToken(): Promise<string> {
   return body.access_token;
 }
 
-function chooseBestMatch(name: string, people: GooglePerson[]): GooglePerson | null {
+export function chooseBestMatch(name: string, people: GooglePerson[]): GooglePerson | null {
+  const queryTokens = normalizeName(name);
   const lowerName = name.toLowerCase();
 
   const exactMatch = people.find(person =>
     person.names?.some(nameObject => nameObject.displayName?.toLowerCase() === lowerName)
   );
 
-  return exactMatch ?? people[0] ?? null;
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  const tokenMatch = people.find(person =>
+    person.names?.some(nameObject => matchesNameTokens(queryTokens, nameObject))
+  );
+
+  return tokenMatch ?? null;
 }
 
-async function searchContact(accessToken: string, name: string): Promise<GooglePerson | null> {
+export function buildSearchQueries(name: string): string[] {
+  const tokens = normalizeName(name);
+  const queries = [name];
+
+  if (tokens.length >= 2) {
+    const firstToken = tokens[0];
+    const lastToken = tokens[tokens.length - 1];
+    queries.push(lastToken);
+
+    if (firstToken !== lastToken) {
+      queries.push(firstToken);
+    }
+
+    if (tokens.length > 2) {
+      queries.push(`${firstToken} ${lastToken}`);
+    }
+  }
+
+  return [...new Set(queries)];
+}
+
+async function searchContacts(accessToken: string, query: string): Promise<GooglePerson[]> {
   const response = await apiClient('https://people.googleapis.com/v1/people:searchContacts', {
     searchParams: {
-      query: name,
-      pageSize: '10',
+      query,
+      pageSize: '20',
       readMask: 'names,birthdays',
     },
     headers: {
@@ -195,8 +253,53 @@ async function searchContact(accessToken: string, name: string): Promise<GoogleP
     results?: { person?: GooglePerson }[];
   };
 
-  const people = body.results?.flatMap(result => (result.person ? [result.person] : [])) ?? [];
-  return chooseBestMatch(name, people);
+  return body.results?.flatMap(result => (result.person ? [result.person] : [])) ?? [];
+}
+
+async function listContacts(accessToken: string): Promise<GooglePerson[]> {
+  const people: GooglePerson[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const response = await apiClient('https://people.googleapis.com/v1/people/me/connections', {
+      searchParams: {
+        pageSize: '200',
+        personFields: 'names,birthdays',
+        pageToken,
+      },
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    const body = response.body as {
+      connections?: GooglePerson[];
+      nextPageToken?: string;
+    };
+
+    if (Array.isArray(body.connections)) {
+      people.push(...body.connections);
+    }
+
+    pageToken = body.nextPageToken;
+  } while (pageToken);
+
+  return people;
+}
+
+async function searchContact(accessToken: string, name: string): Promise<GooglePerson | null> {
+  const queries = buildSearchQueries(name);
+
+  for (const query of queries) {
+    const people = await searchContacts(accessToken, query);
+    const match = chooseBestMatch(name, people);
+    if (match) {
+      return match;
+    }
+  }
+
+  const allContacts = await listContacts(accessToken);
+  return chooseBestMatch(name, allContacts);
 }
 
 async function updateContactBirthday(
@@ -312,21 +415,37 @@ async function run(options: { csvPath: string; resultPath: string }): Promise<vo
 
 const program = new Command();
 program
-  .description(
-    'Update Google Contacts birthdays from a CSV file. Existing birthdays are preserved.'
-  )
+  .description('Update Google Contacts birthdays from a CSV file or search for a contact by name.')
   .option('-c, --csv <path>', 'source CSV file path', 'src/facebook-dates-of-birth.csv')
-  .option('-o, --result <path>', 'result JSONL file path', 'contact-updates.jsonl');
+  .option('-o, --result <path>', 'result JSONL file path', 'contact-updates.jsonl')
+  .option('-s, --search <name>', 'search for a contact by name');
 
 if (process.argv[1] === new URL(import.meta.url).pathname) {
   program.parse(process.argv);
   const options = program.opts();
 
-  run({ csvPath: options.csv, resultPath: options.result }).catch(error => {
-    logger.error(
-      { error: error instanceof Error ? error.message : String(error) },
-      'Script failed'
-    );
-    process.exit(1);
-  });
+  if (options.search) {
+    const searchName = options.search as string;
+    refreshAccessToken()
+      .then(accessToken => searchContact(accessToken, searchName))
+      .then(contact => {
+        console.log(JSON.stringify(contact ?? null, null, 2));
+        process.exit(contact ? 0 : 1);
+      })
+      .catch(error => {
+        logger.error(
+          { error: error instanceof Error ? error.message : String(error) },
+          'Search failed'
+        );
+        process.exit(1);
+      });
+  } else {
+    run({ csvPath: options.csv, resultPath: options.result }).catch(error => {
+      logger.error(
+        { error: error instanceof Error ? error.message : String(error) },
+        'Script failed'
+      );
+      process.exit(1);
+    });
+  }
 }
