@@ -1,86 +1,61 @@
-# typescript-template
+# birthdater
 
-A template for a Typescript repository
+Update Google Contacts birthdays from a CSV file.
 
-## ESLint Setup
+## Install
 
-```javascript
-module.exports = {
-  env: {
-    es2022: true,
-    node: true,
-  },
-  overrides: [
-    {
-      files: ['**/*.js'],
-      extends: ['eslint:recommended'],
-      // https://eslint.org/docs/v8.x/use/configure/language-options#specifying-parser-options
-      parserOptions: {
-        ecmaVersion: '2022',
-      },
-    },
-    {
-      files: ['src**/*.ts'],
-      extends: [
-        'eslint:recommended',
-        'plugin:@typescript-eslint/recommended-type-checked',
-        'plugin:@typescript-eslint/stylistic-type-checked',
-      ],
-      plugins: ['@typescript-eslint'],
-      parser: '@typescript-eslint/parser',
-      parserOptions: {
-        project: true,
-      },
-    },
-  ],
-};
+```bash
+npm install -g .
 ```
 
-The newest version of ESLint is using the new `flatconfig` format. Even though it looks cool sadly
+## Google credentials
 
-the adaptation of it in the community has not yet reached to the point where it makes sense to start
+1. Create a Google Cloud project.
+   - Open the API Manager: https://console.developers.google.com/apis/library
+   - Search for and enable the Google People API.
+2. In the OAuth consent screen, configure a user type and add your email.
+3. Create OAuth credentials for a "Desktop app" and note the client ID and secret.
+   - This credential type is for native applications.
+   - If you use the Google OAuth Playground with "Use your own OAuth credentials", you may need a Web app credential instead.
+   - For the Playground, a Web app client needs this Authorized redirect URI:
+     `https://developers.google.com/oauthplayground`
+4. Obtain a refresh token using the Google OAuth Playground or another OAuth client.
+   - The OAuth Playground is a Google web tool for manually exchanging auth codes and tokens.
+   - Use scope: `https://www.googleapis.com/auth/contacts`
+   - Enable "Use your own OAuth credentials" and enter the client ID and secret.
+   - If you want to test the access token without `profile` scope, use:
+     `https://people.googleapis.com/v1/people:searchContacts?query=me&readMask=names,birthdays`
+   - If you get `redirect_uri_mismatch` with the Playground, switch to a Web app OAuth client and add the Playground redirect URI.
+   - Exchange the authorization code for a refresh token.
+5. Set the env vars before running the CLI:
 
-using it. That is why this repo uses the `8.57.0` version which still defaults to the old config
+```bash
+export GOOGLE_CONTACTS_CLIENT_ID=your_client_id
+export GOOGLE_CONTACTS_CLIENT_SECRET=your_client_secret
+export GOOGLE_CONTACTS_REFRESH_TOKEN=your_refresh_token
+```
 
-file format. It has some consequences.
+## Usage
 
-1. The file has to be in CommonJS format since version `8.57.0` doesn't support anything else
-2. The support both JS and Typescript by using the overrides property.
-3. Note that the `module.exports.overrides[0].parserOptions` needs to have a higher ECMA version
+```bash
+GOOGLE_CONTACTS_CLIENT_ID=your_client_id \
+GOOGLE_CONTACTS_CLIENT_SECRET=your_client_secret \
+GOOGLE_CONTACTS_REFRESH_TOKEN=your_refresh_token \
+birthdater --csv src/facebook-dates-of-birth.csv --result contact-updates.jsonl
+```
 
-   specified as the default is `ES5`. For the Typescript configuration this is not needed as it
+Each line in `contact-updates.jsonl` is a JSON object describing the person and the action taken.
 
-   reads the settings from the `tsconfig` when `module.exports.overrides[1].parserOptions.project`
+## Local development
 
-   is set to `true`
+```bash
+npm run google-contacts -- --csv src/facebook-dates-of-birth.csv --result contact-updates.jsonl
+```
 
-## Why is nodemon Used Over tsx watch
+## Scripts
 
-Because `tsx watch` does not support watching .env file.
-
-## Migration from Jest to Vitest
-
-1. Uninstall Jest
-
-   ```bash
-   npm uninstall jest @types/jest
-   npm install -D vitest
-   ```
-
-1. Configure Vitest
-
-   [vitest config in the repo](vitest.config.ts)
-
-1. Update package.json with test commands referencing `vitest` rather than `jest`
-
-   ```json
-   {
-     "scripts": {
-       "test": "vitest run",
-       "test:watch": "vitest watch",
-       "test:coverage": "vitest run --coverage"
-     }
-   }
-   ```
-
-1. And ensure to add `import { describe, it, expect } from 'vitest';` at the top of test cases.
+- `npm run build`
+- `npm run google-contacts`
+- `npm run lint`
+- `npm test`
+- `npm run format`
