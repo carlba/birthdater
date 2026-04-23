@@ -21,14 +21,15 @@ npm run format         # Format with Prettier
 
 ### Clean Code Principles
 
+### Clean Code Principles
+
 - **Meaningful names**: Every variable, function, parameter, and class name should clearly express
-  its intent. Never use single-letter variables (except loop indices like `i` in trivial for-loops
-  where no semantic name exists).
+  its intent. Never use single-letter variables except in regular for loops where i and k is OK.
 - **Functions do one thing**: Keep functions small and focused on a single responsibility. If a
   function needs a comment to explain what it does, rename it or split it.
 - **Avoid magic numbers/strings**: Extract constants with descriptive names instead of using bare
   literals.
-- **Prefer positive conditionals**: Write `if (isValid)` rather than `if (!isInvalid)`.
+- **Prefer positive conditionals**: Write `if (isValid)` rather than `if (!isInvalid)`.Æ
 - **Limit function arguments**: Prefer fewer than three parameters. When more are needed, group
   related arguments into a named options object.
 - **Don't repeat yourself**: Extract duplicated logic into well-named shared functions.
